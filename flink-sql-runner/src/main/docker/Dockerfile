@@ -46,21 +46,27 @@ RUN set -eu; \
     && rm -f /tmp/async-profiler.tar.gz \
     && rm -rf /var/lib/apt/lists/*
 
-COPY flink-s3-fs-hadoop-*.jar /opt/flink/lib
-COPY hadoop-common-*.jar /opt/flink/lib
-COPY hadoop-hdfs-client-*.jar /opt/flink/lib
-COPY hadoop-mapreduce-client-core-*.jar /opt/flink/lib
-COPY iceberg-flink-runtime-*.jar /opt/flink/lib
-COPY iceberg-aws-bundle-*.jar /opt/flink/lib
-COPY stdlib-utils-*.jar /opt/flink/lib
-COPY flink-sql-runner.uber.jar /opt/flink/lib/sql-runner.uber.jar
-COPY --chmod=755 sql-runner /opt/flink/bin/sql-runner
+COPY --chown=flink:flink flink-s3-fs-hadoop-*.jar /opt/flink/lib
+COPY --chown=flink:flink hadoop-common-*.jar /opt/flink/lib
+COPY --chown=flink:flink hadoop-hdfs-client-*.jar /opt/flink/lib
+COPY --chown=flink:flink hadoop-mapreduce-client-core-*.jar /opt/flink/lib
+COPY --chown=flink:flink iceberg-flink-runtime-*.jar /opt/flink/lib
+COPY --chown=flink:flink iceberg-aws-bundle-*.jar /opt/flink/lib
+COPY --chown=flink:flink stdlib-utils-*.jar /opt/flink/lib
+COPY --chown=flink:flink flink-sql-runner.uber.jar /opt/flink/lib/sql-runner.uber.jar
+COPY --chown=flink:flink --chmod=755 sql-runner /opt/flink/bin/sql-runner
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
 
+# Note: avoid `chown -R /opt/flink` here. Recursively changing ownership of the
+# whole Flink directory rewrites every file into a new image layer (~800MB of
+# duplicated content). The Flink distribution is already owned by flink:flink in
+# the base image, and the artifacts above are copied with `--chown`, so only the
+# files created in this step need their ownership fixed.
 RUN echo 'UEsDBBQACAgIAG2UllwAAAAAAAAAAAAAAAAUAAQATUVUQS1JTkYvTUFOSUZFU1QuTUb+ygAA803My0xLLS7RDUstKs7Mz7NSMNQz4HIuSk0sSU3Rdaq0UkjLyczL1i0uzNEtKs3LSy3i4gIAUEsHCL/cUjU2AAAANAAAAFBLAQIUABQACAgIAG2Ully/3FI1NgAAADQAAAAUAAQAAAAAAAAAAAAAAAAAAABNRVRBLUlORi9NQU5JRkVTVC5NRv7KAABQSwUGAAAAAAEAAQBGAAAAfAAAAAAA' | base64 -d > /opt/flink/noop.jar \
     && mkdir -p /opt/flink/hadoop-conf \
     && echo '<configuration><property><name>fs.s3a.aws.credentials.provider</name><value>com.amazonaws.auth.DefaultAWSCredentialsProviderChain</value></property></configuration>' > /opt/flink/hadoop-conf/core-site.xml \
-    && chown -R flink:flink /opt/flink
+    && chown flink:flink /opt/flink/noop.jar \
+    && chown -R flink:flink /opt/flink/hadoop-conf
 
 USER flink
 
