@@ -71,6 +71,8 @@ import java.util.stream.Stream;
 import static com.datasqrl.flinkrunner.connector.kafka.DeserFailureHandlerOptions.SCAN_DESER_FAILURE_HANDLER;
 import static com.datasqrl.flinkrunner.connector.kafka.DeserFailureHandlerOptions.SCAN_DESER_FAILURE_TOPIC;
 import static com.datasqrl.flinkrunner.connector.kafka.DeserFailureHandlerOptions.validateDeserFailureHandlerOptions;
+import static com.datasqrl.flinkrunner.connector.kafka.RateLimitOptions.SCAN_RATE_LIMIT_RECORDS_PER_SECOND;
+import static com.datasqrl.flinkrunner.connector.kafka.RateLimitOptions.validateRateLimitOptions;
 import static com.datasqrl.flinkrunner.connector.kafka.SourceWatermarkOptions.SCAN_SOURCE_WATERMARK_IDLE_ADVANCE_BROKER_CHECK_TIMEOUT;
 import static com.datasqrl.flinkrunner.connector.kafka.SourceWatermarkOptions.SCAN_SOURCE_WATERMARK_IDLE_ADVANCE_BROKER_CHECK_TTL;
 import static com.datasqrl.flinkrunner.connector.kafka.SourceWatermarkOptions.SCAN_SOURCE_WATERMARK_IDLE_ADVANCE_SAFETY_MARGIN;
@@ -175,6 +177,7 @@ public class SafeKafkaDynamicTableFactory
         options.add(TRANSACTION_NAMING_STRATEGY);
         options.add(SCAN_DESER_FAILURE_HANDLER);
         options.add(SCAN_DESER_FAILURE_TOPIC);
+        options.add(SCAN_RATE_LIMIT_RECORDS_PER_SECOND);
         options.add(WATERMARK_EMIT_STRATEGY);
         options.add(SOURCE_IDLE_TIMEOUT);
         options.add(SCAN_SOURCE_WATERMARK_MIN_RECORDS);
@@ -231,6 +234,8 @@ public class SafeKafkaDynamicTableFactory
 
         validateDeserFailureHandlerOptions(tableOptions);
 
+        validateRateLimitOptions(tableOptions);
+
         final StartupOptions startupOptions = getStartupOptions(tableOptions);
 
         final BoundedOptions boundedOptions = getBoundedOptions(tableOptions);
@@ -257,6 +262,9 @@ public class SafeKafkaDynamicTableFactory
         final DeserFailureHandler deserFailureHandler =
                 DeserFailureHandler.of(tableOptions, properties);
 
+        final Long rateLimitRecordsPerSecond =
+                tableOptions.getOptional(SCAN_RATE_LIMIT_RECORDS_PER_SECOND).orElse(null);
+
         return createKafkaTableSource(
                 physicalDataType,
                 keyDecodingFormat.orElse(null),
@@ -278,7 +286,8 @@ public class SafeKafkaDynamicTableFactory
                 deserFailureHandler,
                 tableOptions.get(WATERMARK_EMIT_STRATEGY),
                 tableOptions.getOptional(SOURCE_IDLE_TIMEOUT),
-                sourceWatermarkConfiguration(tableOptions));
+                sourceWatermarkConfiguration(tableOptions),
+                rateLimitRecordsPerSecond);
     }
 
     @Override
@@ -449,7 +458,8 @@ public class SafeKafkaDynamicTableFactory
             DeserFailureHandler deserFailureHandler,
             WatermarkEmitStrategy sourceWatermarkEmitStrategy,
             Optional<Duration> sourceWatermarkIdleTimeout,
-            SourceWatermarkConfig sourceWatermarkConfig) {
+            SourceWatermarkConfig sourceWatermarkConfig,
+            @Nullable Long rateLimitRecordsPerSecond) {
         return new SafeKafkaDynamicSource(
                 physicalDataType,
                 keyDecodingFormat,
@@ -472,7 +482,8 @@ public class SafeKafkaDynamicTableFactory
                 deserFailureHandler,
                 sourceWatermarkEmitStrategy,
                 sourceWatermarkIdleTimeout,
-                sourceWatermarkConfig);
+                sourceWatermarkConfig,
+                rateLimitRecordsPerSecond);
     }
 
     protected KafkaDynamicSink createKafkaTableSink(

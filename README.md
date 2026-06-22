@@ -213,9 +213,29 @@ In addition to the configuration options exposed by the original kafka connector
 |----------------------------|---------|--------|-----------------------------------------------------------------------------------------------------------------------------------|
 | scan.deser-failure.handler | none    | String | Use `log` to output failed messages to the logger, `kafka` to output failed messages to a kafka topic, or `none` to fail the job. |
 | scan.deser-failure.topic   | -       | String | The topic for the dead-letter-queue that failed messages are written to. Required when the handler is configured to `kafka`.      |
+| scan.rate-limit.records-per-second | - | Long | Maximum number of records per second emitted by the source across all source subtasks. The limit is divided evenly among the parallel subtasks. When unset, rate limiting is disabled. |
 
 > [!NOTE]  
 > The dead-letter-queue producer will use the same Kafka configuration that is provided for the Flink SQL table that reads the data.
+
+#### Source Rate Limiting
+
+Both the `kafka-safe` and `upsert-kafka-safe` connectors support throttling how fast records are consumed via the optional `scan.rate-limit.records-per-second` option. This is useful to protect a shared Kafka cluster or a slow downstream system from being overwhelmed.
+
+```sql
+CREATE TABLE orders (
+  `order_id` BIGINT,
+  `ts` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka-safe',
+  'topic' = 'orders',
+  'properties.bootstrap.servers' = 'localhost:9092',
+  'format' = 'json',
+  'scan.rate-limit.records-per-second' = '1000'
+);
+```
+
+The configured value is the cumulative rate across all source subtasks. For example, with `scan.rate-limit.records-per-second` set to `1000` and a source parallelism of `4`, each subtask is limited to roughly `250` records per second.
 
 ### Conflict Handling for PostgreSQL Sinks
 

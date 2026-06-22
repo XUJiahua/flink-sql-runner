@@ -56,6 +56,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.datasqrl.flinkrunner.connector.kafka.DeserFailureHandlerOptions.*;
+import static com.datasqrl.flinkrunner.connector.kafka.RateLimitOptions.SCAN_RATE_LIMIT_RECORDS_PER_SECOND;
+import static com.datasqrl.flinkrunner.connector.kafka.RateLimitOptions.validateRateLimitOptions;
 import static com.datasqrl.flinkrunner.connector.kafka.SourceWatermarkOptions.SCAN_SOURCE_WATERMARK_IDLE_ADVANCE_BROKER_CHECK_TIMEOUT;
 import static com.datasqrl.flinkrunner.connector.kafka.SourceWatermarkOptions.SCAN_SOURCE_WATERMARK_IDLE_ADVANCE_BROKER_CHECK_TTL;
 import static com.datasqrl.flinkrunner.connector.kafka.SourceWatermarkOptions.SCAN_SOURCE_WATERMARK_IDLE_ADVANCE_SAFETY_MARGIN;
@@ -131,6 +133,7 @@ public class SafeUpsertKafkaDynamicTableFactory
         options.add(SCAN_BOUNDED_TIMESTAMP_MILLIS);
         options.add(SCAN_DESER_FAILURE_HANDLER);
         options.add(SCAN_DESER_FAILURE_TOPIC);
+        options.add(SCAN_RATE_LIMIT_RECORDS_PER_SECOND);
         options.add(DELIVERY_GUARANTEE);
         options.add(TRANSACTIONAL_ID_PREFIX);
         options.add(SCAN_PARALLELISM);
@@ -184,6 +187,10 @@ public class SafeUpsertKafkaDynamicTableFactory
         final DeserFailureHandler deserFailureHandler =
                 DeserFailureHandler.of(tableOptions, properties);
 
+        validateRateLimitOptions(tableOptions);
+        final Long rateLimitRecordsPerSecond =
+                tableOptions.getOptional(SCAN_RATE_LIMIT_RECORDS_PER_SECOND).orElse(null);
+
         Integer parallelism = tableOptions.get(SCAN_PARALLELISM);
 
         return new SafeKafkaDynamicSource(
@@ -208,7 +215,8 @@ public class SafeUpsertKafkaDynamicTableFactory
                 deserFailureHandler,
                 tableOptions.get(WATERMARK_EMIT_STRATEGY),
                 tableOptions.getOptional(SOURCE_IDLE_TIMEOUT),
-                sourceWatermarkConfiguration(tableOptions));
+                sourceWatermarkConfiguration(tableOptions),
+                rateLimitRecordsPerSecond);
     }
 
     @Override
