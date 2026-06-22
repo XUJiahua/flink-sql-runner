@@ -26,6 +26,7 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.util.ratelimit.RateLimitedSourceReader;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.split.KafkaPartitionSplit;
+import org.apache.flink.streaming.api.lineage.SourceLineageVertex;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.Test;
 
@@ -65,6 +66,17 @@ class RateLimitedKafkaSourceTest {
     RateLimitedKafkaSource<RowData> source = new RateLimitedKafkaSource<>(delegate, 100);
 
     assertThat(source.getBoundedness()).isEqualTo(Boundedness.CONTINUOUS_UNBOUNDED);
+  }
+
+  @Test
+  void shouldDelegateLineageVertex() {
+    KafkaSource<RowData> delegate = kafkaSource();
+    SourceLineageVertex lineageVertex = mock(SourceLineageVertex.class);
+    when(delegate.getLineageVertex()).thenReturn(lineageVertex);
+
+    RateLimitedKafkaSource<RowData> source = new RateLimitedKafkaSource<>(delegate, 100);
+
+    assertThat(source.getLineageVertex()).isSameAs(lineageVertex);
   }
 
   @Test

@@ -32,6 +32,8 @@ import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.KafkaSourceEnumState;
 import org.apache.flink.connector.kafka.source.split.KafkaPartitionSplit;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.streaming.api.lineage.LineageVertexProvider;
+import org.apache.flink.streaming.api.lineage.SourceLineageVertex;
 import org.apache.flink.util.Preconditions;
 
 /**
@@ -49,7 +51,9 @@ import org.apache.flink.util.Preconditions;
  * @param <T> the output type of the source.
  */
 public class RateLimitedKafkaSource<T>
-    implements Source<T, KafkaPartitionSplit, KafkaSourceEnumState>, ResultTypeQueryable<T> {
+    implements Source<T, KafkaPartitionSplit, KafkaSourceEnumState>,
+        ResultTypeQueryable<T>,
+        LineageVertexProvider {
 
   private static final long serialVersionUID = 1L;
 
@@ -114,6 +118,11 @@ public class RateLimitedKafkaSource<T>
   @Override
   public TypeInformation<T> getProducedType() {
     return delegate.getProducedType();
+  }
+
+  @Override
+  public SourceLineageVertex getLineageVertex() {
+    return delegate.getLineageVertex();
   }
 
   public KafkaSource<T> getDelegate() {
