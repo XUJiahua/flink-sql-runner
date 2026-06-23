@@ -18,6 +18,7 @@ package com.datasqrl.flinkrunner.connector.kafka;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.apache.flink.api.connector.source.Boundedness;
@@ -94,6 +95,45 @@ class RateLimitedKafkaSourceTest {
     SourceReader<RowData, KafkaPartitionSplit> reader = source.createReader(readerContext);
 
     assertThat(reader).isInstanceOf(RateLimitedSourceReader.class);
+  }
+
+  @Test
+  void shouldForwardCheckpointCompleteToDelegateReader() throws Exception {
+    KafkaSource<RowData> delegate = kafkaSource();
+    SourceReaderContext readerContext = mock(SourceReaderContext.class);
+    when(readerContext.currentParallelism()).thenReturn(1);
+
+    @SuppressWarnings("unchecked")
+    SourceReader<RowData, KafkaPartitionSplit> innerReader = mock(SourceReader.class);
+    when(delegate.createReader(readerContext)).thenReturn(innerReader);
+
+    RateLimitedKafkaSource<RowData> source = new RateLimitedKafkaSource<>(delegate, 100);
+
+    SourceReader<RowData, KafkaPartitionSplit> reader = source.createReader(readerContext);
+    reader.notifyCheckpointComplete(42L);
+
+    // The delegate KafkaSourceReader performs the actual offset commit to the broker on checkpoint
+    // completion; the wrapper must forward the notification (Flink's RateLimitedSourceReader drops
+    // it, notifying only the rate limiter).
+    verify(innerReader).notifyCheckpointComplete(42L);
+  }
+
+  @Test
+  void shouldForwardCheckpointAbortedToDelegateReader() throws Exception {
+    KafkaSource<RowData> delegate = kafkaSource();
+    SourceReaderContext readerContext = mock(SourceReaderContext.class);
+    when(readerContext.currentParallelism()).thenReturn(1);
+
+    @SuppressWarnings("unchecked")
+    SourceReader<RowData, KafkaPartitionSplit> innerReader = mock(SourceReader.class);
+    when(delegate.createReader(readerContext)).thenReturn(innerReader);
+
+    RateLimitedKafkaSource<RowData> source = new RateLimitedKafkaSource<>(delegate, 100);
+
+    SourceReader<RowData, KafkaPartitionSplit> reader = source.createReader(readerContext);
+    reader.notifyCheckpointAborted(7L);
+
+    verify(innerReader).notifyCheckpointAborted(7L);
   }
 
   @SuppressWarnings("unchecked")

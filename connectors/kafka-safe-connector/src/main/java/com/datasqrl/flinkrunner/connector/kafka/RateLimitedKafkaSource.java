@@ -24,7 +24,6 @@ import org.apache.flink.api.connector.source.SourceReader;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
-import org.apache.flink.api.connector.source.util.ratelimit.RateLimitedSourceReader;
 import org.apache.flink.api.connector.source.util.ratelimit.RateLimiter;
 import org.apache.flink.api.connector.source.util.ratelimit.RateLimiterStrategy;
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
@@ -78,7 +77,7 @@ public class RateLimitedKafkaSource<T>
   public SourceReader<T, KafkaPartitionSplit> createReader(SourceReaderContext readerContext)
       throws Exception {
     SourceReader<T, KafkaPartitionSplit> reader = delegate.createReader(readerContext);
-    return new RateLimitedSourceReader<>(
+    return new OffsetCommittingRateLimitedSourceReader<>(
         reader, createRateLimiter(readerContext.currentParallelism()));
   }
 
