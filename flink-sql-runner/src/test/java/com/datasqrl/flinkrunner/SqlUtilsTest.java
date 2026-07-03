@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -31,5 +32,83 @@ class SqlUtilsTest {
     var script = Resources.toString(getClass().getResource("/sql/" + filename), Charsets.UTF_8);
     var stmts = SqlUtils.parseStatements(script);
     assertThat(stmts).isNotNull().isNotEmpty().hasSize(numberOfStatements);
+  }
+
+  @Test
+  void givenDoubleDashInsideStringLiteral_whenParse_thenNotStrippedAsComment() {
+    var script =
+        "CREATE TEMPORARY TABLE dest (id INT) WITH (\n"
+            + "  'password' = 'Barbarr0206---',\n"
+            + "  'connector' = 'redis'\n"
+            + ");";
+
+    var stmts = SqlUtils.parseStatements(script);
+
+    assertThat(stmts).hasSize(1);
+    assertThat(stmts.get(0))
+        .contains("'password' = 'Barbarr0206---'")
+        .contains("'connector' = 'redis'");
+  }
+
+  @Test
+  void givenBlockCommentMarkersInsideStringLiteral_whenParse_thenNotStripped() {
+    var script = "CREATE TEMPORARY TABLE t (id INT) WITH (\n" + "  'note' = 'a/*b*/c'\n" + ");";
+
+    var stmts = SqlUtils.parseStatements(script);
+
+    assertThat(stmts).hasSize(1);
+    assertThat(stmts.get(0)).contains("'note' = 'a/*b*/c'");
+  }
+
+  @Test
+  void givenEscapedQuoteInsideStringLiteral_whenParse_thenDoubleDashStillPreserved() {
+    // The '' is an escaped single quote inside the literal; the -- after it is still in-string.
+    var script = "CREATE TEMPORARY TABLE t (id INT) WITH (\n" + "  'p' = 'ab''cd--ef'\n" + ");";
+
+    var stmts = SqlUtils.parseStatements(script);
+
+    assertThat(stmts).hasSize(1);
+    assertThat(stmts.get(0)).contains("'p' = 'ab''cd--ef'");
+  }
+
+  @Test
+  void givenCertificateInsideStringLiteral_whenParse_thenPreserved() {
+    var script =
+        "CREATE TEMPORARY TABLE t (id INT) WITH (\n"
+            + "  'ssl.trust' = '-----BEGIN CERTIFICATE-----MIIabc-----END CERTIFICATE-----'\n"
+            + ");";
+
+    var stmts = SqlUtils.parseStatements(script);
+
+    assertThat(stmts).hasSize(1);
+    assertThat(stmts.get(0))
+        .contains("'-----BEGIN CERTIFICATE-----MIIabc-----END CERTIFICATE-----'");
+  }
+
+  @Test
+  void givenLineComment_whenParse_thenStripped() {
+    var script =
+        "-- leading comment\n"
+            + "CREATE TABLE t (id INT) WITH (\n"
+            + "  'connector' = 'print' --trailing comment\n"
+            + ");";
+
+    var stmts = SqlUtils.parseStatements(script);
+
+    assertThat(stmts).hasSize(1);
+    assertThat(stmts.get(0)).doesNotContain("leading comment").doesNotContain("trailing comment");
+    assertThat(stmts.get(0)).contains("'connector' = 'print'");
+  }
+
+  @Test
+  void givenBlockComment_whenParse_thenStripped() {
+    var script =
+        "CREATE TABLE t /* inline block comment */ (id INT) WITH (\n" + "  'k' = 'v'\n" + ");";
+
+    var stmts = SqlUtils.parseStatements(script);
+
+    assertThat(stmts).hasSize(1);
+    assertThat(stmts.get(0)).doesNotContain("inline block comment");
+    assertThat(stmts.get(0)).contains("'k' = 'v'");
   }
 }
